@@ -4,6 +4,8 @@ from collections import OrderedDict
 class CentroidTracker:
     def __init__(self, max_disappeared=10):
         self.next_id = 0
+        self.max_trail = 20000
+        self.trail_map = []
         self.objects = OrderedDict()
         self.disappeared = OrderedDict()
         self.max_disappeared = max_disappeared
@@ -58,5 +60,10 @@ class CentroidTracker:
 
             for col in unused_cols:
                 self.register(input_centroids[col])
+        
+        for c in input_centroids:
+            self.trail_map.append(c)
+            if len(self.trail_map) > self.max_trail:
+                self.trail_map.pop(0)
 
         return self.objects
