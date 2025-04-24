@@ -1,27 +1,31 @@
 import smtplib
-from email.mime.text import MIMEText
 from twilio.rest import Client
 
-# Email
-def send_email_alert(subject, body, to_email="recipient@example.com"):
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = "alif.rahman.c@gmail.com"
-    msg["To"] = to_email
-    
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-        smtp.login("alif.rahman.c@gmail.com", "app_password")
-        smtp.send_message(msg)
+def send_advanced_alert(subject, message):
+    send_email_alert(subject, message)
+    send_whatsapp_alert(message)
 
-# WhatsApp via Twilio
+def send_email_alert(subject, message):
+    sender_email = "your_email@example.com"
+    receiver_email = "recipient@example.com"
+    password = "your_email_password"
+    try:
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        server.login(sender_email, password)
+        message = f'Subject: {subject}\n\n{message}'
+        server.sendmail(sender_email, receiver_email, message)
+        server.quit()
+    except Exception as e:
+        print(f"Error sending email: {e}")
+
 def send_whatsapp_alert(message):
-    account_sid = "your_account_sid"
-    auth_token = "your_auth_token"
+    account_sid = "your_twilio_account_sid"
+    auth_token = "your_twilio_auth_token"
     client = Client(account_sid, auth_token)
-
-    client.messages.create(
+    
+    message = client.messages.create(
         body=message,
-        from_='whatsapp:+14155238886',  # Twilio sandbox number
-        to='whatsapp:+880130055542'
+        from_="whatsapp:+8801300155542",
+        to="whatsapp:+your_number"
     )
-    print(f"WhatsApp Alert: {message}")
+    print(f"WhatsApp message sent: {message.sid}")

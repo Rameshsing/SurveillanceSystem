@@ -3,12 +3,16 @@ import eventlet
 from main import process_frame
 from flask import Flask, Response, render_template, request, jsonify
 from flask_socketio import SocketIO
-# access via http://localhost:5000/video
+from loitering_detector import LoiteringDetector
+from alerts import send_advanced_alert
+from reporting import generate_report
 
-eventlet.monkey_patch()
+# access via http://localhost:5000/video
 
 app = Flask(__name__)
 socketio = SocketIO(app)
+eventlet.monkey_patch()
+loitering_detector = LoiteringDetector()
 cap = cv2.VideoCapture(0)
 ret, frame = cap.read()
 
@@ -56,3 +60,20 @@ def receive_alert():
     # Process the alert_data as needed
     print(f"Received alert: {alert_data}")
     return jsonify({'status': 'Alert received'}), 200
+
+@app.route('/api/alerts', methods=['POST'])
+def send_alert():
+    alert_type = request.json.get('alert_type')
+    details = request.json.get('details')
+    send_advanced_alert(alert_type, details)
+    return jsonify({"status": "alert sent"})
+
+@app.route('/api/reports', methods=['GET'])
+def get_report():
+    # Assume some analytics data is gathered, now generate report
+    data = {"columns": ["time", "in", "out"], "rows": [["2025-04-25 12:00:00", 5, 2]]}
+    report_file = generate_report(data, "traffic_report.csv")
+    return jsonify({"status": "report generated", "file": report_file})
+
+if __name__ == '__main__':
+    app.run(debug=True)

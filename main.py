@@ -2,9 +2,10 @@ import os
 import cv2
 import csv
 import numpy as np
-
 from datetime import datetime
 from db import init_db, insert_log
+from app import send_alert
+from dashboard import app as dashboard_app
 
 from detector import PersonDetector, detect_faces
 from tracker import CentroidTracker
@@ -12,6 +13,7 @@ from line_counter import LineCounter
 from pose_utils import PoseDetector
 from posture_classifier import PostureClassifier
 from object_detector import ObjectDetector
+from loitering_detector import LoiteringDetector
 from alerts import send_email_alert, send_whatsapp_alert
 from posture_classifier import DemographicsDetector
 from detectors.zone_intrusion import ZoneIntrusionDetector
@@ -22,7 +24,8 @@ camera_feeds = {
 }
 
 def process_camera(camera_id, path, user_email="recipient@example.com"):
-    global abandoned_objects
+    abandoned_objects = {}  # Moved to local variable inside function
+
     cap = cv2.VideoCapture(path)
 
     detector = PersonDetector()
@@ -32,8 +35,8 @@ def process_camera(camera_id, path, user_email="recipient@example.com"):
     zone_detector = ZoneIntrusionDetector()
     posture_classifier = PostureClassifier()
     demographics_detector = DemographicsDetector()
+    loitering_detector = LoiteringDetector()
     counter = LineCounter(line_position=300)
-    abandoned_objects = {}
 
     while True:
         ret, frame = cap.read()
@@ -54,6 +57,15 @@ def process_camera(camera_id, path, user_email="recipient@example.com"):
         for (object_id, (cx, cy)) in tracked.items():
             cv2.circle(frame, (cx, cy), 4, (255, 0, 0), -1)
             cv2.putText(frame, str(object_id), (cx, cy - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+        # Update loitering detection
+        loitering_alerts = loitering_detector.update(tracked)
+        
+        if loitering_alerts:
+            for alert in loitering_alerts:
+                send_alert(alert_type="loitering", details=alert)
+
+        cv2.imshow(f"Camera {camera_id}", frame)
 
         # Inactivity check
         inactive_objects = []
@@ -103,10 +115,10 @@ def process_camera(camera_id, path, user_email="recipient@example.com"):
             zone_x = min(cx // zone_width, zone_grid[1] - 1)
             zone_counts[zone_y, zone_x] += 1
             
-            #Crop the face or upper body of the detected person
+            # Crop the face or upper body of the detected person
             face_roi = frame[cy-50:cy+50, cx-50:cx+50]
 
-             # Get Age and Gender predictions
+            # Get Age and Gender predictions
             age, gender = demographics_detector.detect_age_gender(face_roi)
             cv2.putText(frame, f"Age: {age}, Gender: {gender}", (cx, cy - 30), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
@@ -147,7 +159,7 @@ def process_camera(camera_id, path, user_email="recipient@example.com"):
             print(f"[ALERT] Object {object_id} entered restricted zone {zone_id}")
             alert_text += f"Intrusion({zone_id}) "
         
-        # loitering detection
+        # Loitering detection
         loitering_time = 150  # frames (~5 seconds if 30 FPS)
 
         for obj_id, points in tracker.object_history.items():
@@ -158,7 +170,6 @@ def process_camera(camera_id, path, user_email="recipient@example.com"):
                     cx, cy = points[-1]
                     cv2.putText(frame, "⚠️ Loitering Detected", (cx, cy + 60),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-
 
         # Logging
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -189,34 +200,14 @@ def process_camera(camera_id, path, user_email="recipient@example.com"):
 
         frame = cv2.addWeighted(zone_overlay, 0.4, frame, 0.6, 0)
 
-
         cv2.imshow(f"People Flow - {camera_id}", frame)
         if cv2.waitKey(1) == ord('q'):
             break
 
-    # Heatmap generation
-    heatmap = np.zeros((frame.shape[0], frame.shape[1]), dtype=np.uint8)
-    for (x, y) in tracker.trail_map:
-        if 0 <= y < heatmap.shape[0] and 0 <= x < heatmap.shape[1]:
-            heatmap[y, x] += 5
-
-    heatmap_colored = cv2.applyColorMap(cv2.GaussianBlur(heatmap, (25, 25), 0), cv2.COLORMAP_JET)
-    overlay = cv2.addWeighted(orig_frame, 0.6, heatmap_colored, 0.4, 0)
-    cv2.imshow(f"Heatmap - {camera_id}", overlay)
-
-    # Zone heatmap generation
-    norm_zone = cv2.normalize(zone_counts, None, 0, 255, cv2.NORM_MINMAX)
-    zone_heat = cv2.resize(norm_zone.astype(np.uint8), (frame_width, frame_height), interpolation=cv2.INTER_NEAREST)
-    zone_heat = cv2.resize(zone_heat, (frame_width, frame_height), interpolation=cv2.INTER_NEAREST)
-    zone_heat_colored = cv2.applyColorMap(zone_heat, cv2.COLORMAP_JET)
-    
-    # Overlay zone heatmap on original frame
+    # Saving Heatmap
     os.makedirs("logs", exist_ok=True)
     conn = init_db()
 
-    cv2.imwrite(f"logs/zone_heatmap_{camera_id}.jpg", zone_heat_colored)
-    cv2.imwrite(f"logs/heatmap_{camera_id}.jpg", overlay)
-    
     # Save traffic log
     with open(f"logs/traffic_log_{camera_id}.csv", "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["time", "in", "out", "camera_id", "posture", "alert"])
@@ -225,7 +216,7 @@ def process_camera(camera_id, path, user_email="recipient@example.com"):
             entry["camera_id"] = camera_id
             writer.writerow(entry)
     
-    # zone counts
+    # Save zone counts
     with open(f"logs/zone_counts_{camera_id}.csv", "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["Zone(Row,Col)", "Count"])
@@ -247,4 +238,5 @@ def main():
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
+    dashboard_app.run_server(debug=True)
     main()
