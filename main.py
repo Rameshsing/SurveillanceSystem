@@ -7,6 +7,7 @@ from tracker import CentroidTracker
 from line_counter import LineCounter
 from pose_utils import PoseDetector
 from posture_classifier import PostureClassifier
+from object_detector import ObjectDetector
 from datetime import datetime
 
 camera_feeds = {
@@ -19,6 +20,8 @@ for camera_id, path in camera_feeds.items():
     detector = PersonDetector()
     tracker = CentroidTracker()
     pose_detector = PoseDetector()
+    object_detector = ObjectDetector()
+    abandoned_objects = {}
     posture_classifier = PostureClassifier()
     counter = LineCounter(line_position=300)
 
@@ -84,6 +87,21 @@ for camera_id, path in camera_feeds.items():
         cv2.putText(frame, f"Camera: {camera_id}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
         cv2.putText(frame, f"Posture: {posture}", (10, 90),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+        
+        object_boxes = object_detector.detect_objects(frame)
+        object_tracked = tracker.update([box for (box, _, _) in object_boxes])
+
+        # Check for inactivity
+        for obj_id, (cx, cy) in object_tracked.items():
+            if obj_id in abandoned_objects:
+                abandoned_objects[obj_id]["frames"] += 1
+            else:
+                abandoned_objects[obj_id] = {"centroid": (cx, cy), "frames": 1}
+
+            if abandoned_objects[obj_id]["frames"] > 150:  # ~5 seconds at 30 FPS
+                alert_text += "Abandoned Object "
+                cv2.putText(frame, "⚠️ ABANDONED OBJECT", (cx, cy + 40),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
         # Log
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
