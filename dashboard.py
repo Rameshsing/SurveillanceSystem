@@ -1,22 +1,25 @@
 import streamlit as st
 import pandas as pd
-import time
-import os
+import glob
 from PIL import Image
+import os
 
-st.title("People Flow Dashboard")
+st.title("🧠 People Flow Dashboard (Multi-Camera)")
 
-uploaded_csv = st.file_uploader("Upload traffic_log.csv", type="csv")
+# Heatmap section
+st.header("📸 Upload Your Heatmap")
 uploaded_img = st.file_uploader("Upload heatmap image", type=["jpg", "png"])
-
-if uploaded_csv:
-    df = pd.read_csv(uploaded_csv)
-    st.line_chart(df.set_index("time")[["in", "out"]])
-
 if uploaded_img:
     img = Image.open(uploaded_img)
-    st.image(img, caption="Heatmap", use_column_width=True)
+    st.image(img, caption="Uploaded Heatmap", use_column_width=True)
 
-if os.path.exists("traffic_log.csv"):
-    df = pd.read_csv("traffic_log.csv")
+# Traffic Logs
+st.header("📈 Select Camera Traffic Log")
+csv_files = glob.glob("logs/traffic_log_*.csv")
+if csv_files:
+    selected = st.selectbox("Choose Camera Log", csv_files)
+    df = pd.read_csv(selected)
+    df['time'] = pd.to_datetime(df['time'])
+    df = df.sort_values("time")
     st.line_chart(df.set_index("time")[["in", "out"]])
+    st.dataframe(df.tail(10))
