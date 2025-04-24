@@ -6,6 +6,7 @@ class CentroidTracker:
         self.next_id = 0
         self.max_trail = 20000
         self.trail_map = []
+        self.object_history = {}
         self.objects = OrderedDict()
         self.disappeared = OrderedDict()
         self.max_disappeared = max_disappeared
@@ -60,6 +61,12 @@ class CentroidTracker:
 
             for col in unused_cols:
                 self.register(input_centroids[col])
+
+            for object_id, centroid in new_tracked.items():
+                if object_id not in self.object_history:
+                    self.object_history[object_id] = []
+                self.object_history[object_id].append(centroid)
+                self.object_history[object_id] = self.object_history[object_id][-30:]
         
         for c in input_centroids:
             self.trail_map.append(c)

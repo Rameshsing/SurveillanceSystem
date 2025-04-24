@@ -32,3 +32,15 @@ if "alert" in df.columns:
     if not alert_df.empty:
         st.subheader("🚨 Detected Alerts")
         st.dataframe(alert_df[["time", "alert", "posture"]].tail(10))
+
+if "alert" in df.columns:
+    st.subheader("🚨 All Detected Alerts")
+    alert_df = df[df["alert"].str.strip() != ""]
+    st.dataframe(alert_df[["time", "alert", "posture"]].tail(20))
+
+    # Filter by type (optional)
+    st.markdown("### 📌 Filter by Alert Type")
+    alert_type = st.selectbox("Alert Type", ["All", "Fall", "Crowd", "Inactivity"])
+    if alert_type != "All":
+        filtered = alert_df[alert_df["alert"].str.contains(alert_type)]
+        st.dataframe(filtered.tail(10))
