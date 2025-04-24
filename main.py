@@ -30,8 +30,6 @@ for camera_id, path in camera_feeds.items():
         orig_frame = frame.copy()
         boxes = detector.detect(frame)
         tracked = tracker.update(boxes)
-        pose_result = pose_detector.detect_pose(frame)
-        frame = pose_detector.draw_landmarks(frame, pose_result)
         counter.update(tracked)
 
         # Draw bounding boxes
@@ -42,6 +40,12 @@ for camera_id, path in camera_feeds.items():
         for (object_id, (cx, cy)) in tracked.items():
             cv2.circle(frame, (cx, cy), 4, (255, 0, 0), -1)
             cv2.putText(frame, str(object_id), (cx, cy - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        
+        person_count = len(tracked)
+        if person_count > 10:
+            cv2.putText(frame, "⚠️ Crowd Alert!", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 100, 255), 2)
+        crowd_alert = person_count > 10
+        counter.history[-1]["alert"] += " Crowd" if crowd_alert else ""
 
         # Face blur
         faces = detect_faces(frame)
@@ -67,12 +71,29 @@ for camera_id, path in camera_feeds.items():
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
         if posture == "Lying":
             cv2.putText(frame, "ALERT: Possible Fall!", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 3)
+        
+        if pose_result.pose_landmarks:
+            posture = posture_classifier.classify(pose_result.pose_landmarks)
+        else:
+            posture = "Unknown"
 
         # Line counter
         cv2.line(frame, (0, counter.line_y), (frame.shape[1], counter.line_y), (0, 0, 255), 2)
         cv2.putText(frame, f"IN: {counter.count_in} | OUT: {counter.count_out}", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         cv2.putText(frame, f"Camera: {camera_id}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        in_this_frame = counter.count_in
+        out_this_frame = counter.count_out
+
+        counter.history.append({
+            "time": timestamp,
+            "in": in_this_frame,
+            "out": out_this_frame,
+            "posture": posture,
+            "alert": "Fall" if posture == "Lying" else ""
+        })
 
         cv2.imshow(f"People Flow - {camera_id}", frame)
         if cv2.waitKey(1) == ord('q'):
@@ -92,7 +113,7 @@ for camera_id, path in camera_feeds.items():
     cv2.imwrite(f"logs/heatmap_{camera_id}.jpg", overlay)
 
     with open(f"logs/traffic_log_{camera_id}.csv", "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["time", "in", "out", "camera_id"])
+        writer = csv.DictWriter(f, fieldnames=["time", "in", "out", "camera_id", "posture", "alert"])
         writer.writeheader()
         for entry in counter.history:
             entry["camera_id"] = camera_id

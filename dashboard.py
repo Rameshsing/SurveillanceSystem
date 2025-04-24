@@ -23,3 +23,12 @@ if csv_files:
     df = df.sort_values("time")
     st.line_chart(df.set_index("time")[["in", "out"]])
     st.dataframe(df.tail(10))
+
+if "posture" in df.columns:
+    st.bar_chart(df["posture"].value_counts())
+
+if "alert" in df.columns:
+    alert_df = df[df["alert"].str.strip() != ""]
+    if not alert_df.empty:
+        st.subheader("🚨 Detected Alerts")
+        st.dataframe(alert_df[["time", "alert", "posture"]].tail(10))
