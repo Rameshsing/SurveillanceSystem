@@ -2,7 +2,9 @@ import os
 import cv2
 import csv
 import numpy as np
+
 from datetime import datetime
+from db import init_db, insert_log
 
 from detector import PersonDetector, detect_faces
 from tracker import CentroidTracker
@@ -29,7 +31,6 @@ camera_feeds = {
 
 def process_camera(camera_id, path, user_email="recipient@example.com"):
     global abandoned_objects
-    zone_counts = np.zeros(zone_grid, dtype=np.int32)
     cap = cv2.VideoCapture(path)
 
     detector = PersonDetector()
@@ -96,6 +97,8 @@ def process_camera(camera_id, path, user_email="recipient@example.com"):
 
         # Zone counting
         zone_grid = (4, 4)  # 4x4 grid
+        zone_counts = np.zeros(zone_grid, dtype=np.int32)
+
         frame_height, frame_width = frame.shape[:2]
         zone_height = frame_height // zone_grid[0]
         zone_width = frame_width // zone_grid[1]
@@ -180,6 +183,8 @@ def process_camera(camera_id, path, user_email="recipient@example.com"):
     
     # Overlay zone heatmap on original frame
     os.makedirs("logs", exist_ok=True)
+    conn = init_db()
+
     cv2.imwrite(f"logs/zone_heatmap_{camera_id}.jpg", zone_heat_colored)
     cv2.imwrite(f"logs/heatmap_{camera_id}.jpg", overlay)
     
@@ -199,7 +204,11 @@ def process_camera(camera_id, path, user_email="recipient@example.com"):
             for col in range(zone_grid[1]):
                 writer.writerow([(row, col), zone_counts[row, col]])
 
-
+    for entry in counter.history:
+        entry["camera_id"] = camera_id
+        insert_log(conn, entry)
+    conn.close()
+    
     cap.release()
 
 def main():
