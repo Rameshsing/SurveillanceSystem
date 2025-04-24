@@ -14,16 +14,7 @@ from posture_classifier import PostureClassifier
 from object_detector import ObjectDetector
 from alerts import send_email_alert, send_whatsapp_alert
 from posture_classifier import DemographicsDetector
-
-# Initialize reusable components
-detector = PersonDetector()
-tracker = CentroidTracker()
-pose_detector = PoseDetector()
-posture_classifier = PostureClassifier()
-object_detector = ObjectDetector()
-counter = LineCounter(line_position=300)
-abandoned_objects = {}
-
+from detectors.zone_intrusion import ZoneIntrusionDetector
 
 camera_feeds = {
     "store_front": "data/test_videos/front.mp4",
@@ -38,6 +29,7 @@ def process_camera(camera_id, path, user_email="recipient@example.com"):
     tracker = CentroidTracker()
     pose_detector = PoseDetector()
     object_detector = ObjectDetector()
+    zone_detector = ZoneIntrusionDetector()
     posture_classifier = PostureClassifier()
     demographics_detector = DemographicsDetector()
     counter = LineCounter(line_position=300)
@@ -140,6 +132,21 @@ def process_camera(camera_id, path, user_email="recipient@example.com"):
                 alert_text += "Abandoned Object "
                 cv2.putText(frame, "⚠️ ABANDONED OBJECT", (cx, cy + 40),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+        # Draw zones and detect intrusions
+        frame = zone_detector.draw_zones(frame, camera_id)
+        tracked_wrapped = {oid: {"centroid": pos} for oid, pos in tracked.items()}
+        intrusions = zone_detector.detect_intrusions(camera_id, tracked_wrapped)
+
+
+        for intrusion in intrusions:
+            object_id = intrusion["object_id"]
+            zone_id = intrusion["zone_id"]
+            centroid = intrusion["centroid"]
+
+            cv2.putText(frame, f"INTRUSION: {zone_id}", tuple(centroid), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            print(f"[ALERT] Object {object_id} entered restricted zone {zone_id}")
+            alert_text += f"Intrusion({zone_id}) "
 
         # Logging
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
