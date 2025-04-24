@@ -1,4 +1,5 @@
 import numpy as np
+import cv2
 from mediapipe.solutions.pose import PoseLandmark
 
 class PostureClassifier:
@@ -40,3 +41,28 @@ class PostureClassifier:
             return "Standing"
         else:
             return "Unknown"
+
+class DemographicsDetector:
+    def __init__(self):
+        # Load pre-trained models
+        self.age_net = cv2.dnn.readNetFromCaffe('age_deploy.prototxt', 'age_net.caffemodel')
+        self.gender_net = cv2.dnn.readNetFromCaffe('gender_deploy.prototxt', 'gender_net.caffemodel')
+
+        self.age_list = ['(0-2)', '(4-6)', '(8-12)', '(15-20)', '(25-32)', '(38-43)', '(48-53)', '(60-100)']
+        self.gender_list = ['Male', 'Female']
+
+    def detect_age_gender(self, frame):
+        # Prepare input for the model
+        blob = cv2.dnn.blobFromImage(frame, 1, (227, 227), (78.0, 87.0, 114.0), swapRB=False)
+        
+        # Predict Gender
+        self.gender_net.setInput(blob)
+        gender_preds = self.gender_net.forward()
+        gender = self.gender_list[gender_preds[0].argmax()]
+
+        # Predict Age
+        self.age_net.setInput(blob)
+        age_preds = self.age_net.forward()
+        age = self.age_list[age_preds[0].argmax()]
+
+        return age, gender

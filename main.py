@@ -13,6 +13,7 @@ from pose_utils import PoseDetector
 from posture_classifier import PostureClassifier
 from object_detector import ObjectDetector
 from alerts import send_email_alert, send_whatsapp_alert
+from posture_classifier import DemographicsDetector
 
 # Initialize reusable components
 detector = PersonDetector()
@@ -38,6 +39,7 @@ def process_camera(camera_id, path, user_email="recipient@example.com"):
     pose_detector = PoseDetector()
     object_detector = ObjectDetector()
     posture_classifier = PostureClassifier()
+    demographics_detector = DemographicsDetector()
     counter = LineCounter(line_position=300)
     abandoned_objects = {}
 
@@ -108,6 +110,14 @@ def process_camera(camera_id, path, user_email="recipient@example.com"):
             zone_y = min(cy // zone_height, zone_grid[0] - 1)
             zone_x = min(cx // zone_width, zone_grid[1] - 1)
             zone_counts[zone_y, zone_x] += 1
+            
+            #Crop the face or upper body of the detected person
+            face_roi = frame[cy-50:cy+50, cx-50:cx+50]
+
+             # Get Age and Gender predictions
+            age, gender = demographics_detector.detect_age_gender(face_roi)
+            cv2.putText(frame, f"Age: {age}, Gender: {gender}", (cx, cy - 30), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
         # Line and status info
         cv2.line(frame, (0, counter.line_y), (frame.shape[1], counter.line_y), (0, 0, 255), 2)
