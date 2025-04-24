@@ -138,7 +138,6 @@ def process_camera(camera_id, path, user_email="recipient@example.com"):
         tracked_wrapped = {oid: {"centroid": pos} for oid, pos in tracked.items()}
         intrusions = zone_detector.detect_intrusions(camera_id, tracked_wrapped)
 
-
         for intrusion in intrusions:
             object_id = intrusion["object_id"]
             zone_id = intrusion["zone_id"]
@@ -147,6 +146,19 @@ def process_camera(camera_id, path, user_email="recipient@example.com"):
             cv2.putText(frame, f"INTRUSION: {zone_id}", tuple(centroid), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
             print(f"[ALERT] Object {object_id} entered restricted zone {zone_id}")
             alert_text += f"Intrusion({zone_id}) "
+        
+        # loitering detection
+        loitering_time = 150  # frames (~5 seconds if 30 FPS)
+
+        for obj_id, points in tracker.object_history.items():
+            if len(points) >= loitering_time:
+                xs, ys = zip(*points[-loitering_time:])
+                if max(xs) - min(xs) < 15 and max(ys) - min(ys) < 15:
+                    alert_text += f"Loitering({obj_id}) "
+                    cx, cy = points[-1]
+                    cv2.putText(frame, "⚠️ Loitering Detected", (cx, cy + 60),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
 
         # Logging
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
