@@ -7,6 +7,13 @@ source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install opencv-python ultralytics numpy pyyaml
 
 opencv-python
+opencv-python-headless
+requests
 ultralytics
 numpy
 pyyaml
+mediapipe
+streamlit
+pandas
+twilio
+flask

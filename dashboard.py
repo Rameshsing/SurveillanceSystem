@@ -44,3 +44,16 @@ if "alert" in df.columns:
     if alert_type != "All":
         filtered = alert_df[alert_df["alert"].str.contains(alert_type)]
         st.dataframe(filtered.tail(10))
+
+st.subheader("📥 Download Logs")
+csv = df.to_csv(index=False).encode('utf-8')
+st.download_button("Download CSV Log", csv, f"log_{selected.split('_')[-1]}", "text/csv")
+
+st.subheader("📊 Alerts Breakdown")
+alert_counts = df["alert"].str.split().explode().value_counts()
+st.bar_chart(alert_counts)
+
+st.subheader("📷 Saved Heatmaps")
+heatmaps = glob.glob("logs/heatmap_*.jpg")
+for img_path in heatmaps:
+    st.image(Image.open(img_path), caption=os.path.basename(img_path), use_column_width=True)
